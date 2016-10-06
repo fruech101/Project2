@@ -17,7 +17,6 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
@@ -33,9 +32,21 @@ process_execute (const char *file_name)
    thread_exit();
   char *fn_copy;
   tid_t tid;
-  char** saveptr;
+  char *token;// used in the separation of filenames and arguments
+  char *argvar[40]; // argument array. assumes less than 10 for stack size reasons.
+  char *trfn; //TRue FileName, sans arguments 
+  char **saveptr=NULL;// also used in the separation of filenames and arguments.
+  
   //Since the filename should be the first token, this should work.
-  char *trfn=strtok_r(file_name, ' ', saveptr);
+  trfn=strtok_r(file_name, " ", saveptr);
+ 
+  //loop through any number of an unknown number of tokens, and separate variables and place them in argvar.
+  int iter=0;
+  while((token=strtok_r(file_name, " ", saveptr))!=NULL)
+  {
+   argvar[iter]=token;
+   iter++;
+  }
   /* Make a copy of filename.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
@@ -55,9 +66,9 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-  char** saveptr;
+  char** saveptr=NULL;
   //Since the filename should be the first token, this should work.
-  char *trfn=strtok_r(file_name_, ' ', saveptr);
+  char *trfn=strtok_r(file_name_, " ", saveptr);
   char *file_name = trfn;
   struct intr_frame if_;
   bool success;
@@ -312,6 +323,38 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Set up stack. */
   if (!setup_stack (esp))
     goto done;
+//Break up filename here!!<---!!
+  char *token;// used in the separation of filenames and arguments
+  char *argvar[40]; // argument array. assumes less than 10 for stack size reasons.
+  char *trfn; //TRue FileName, sans arguments 
+  char **saveptr=NULL;// also used in the separation of filenames and arguments.
+  
+  //Since the filename should be the first token, this should work.
+  trfn=strtok_r(file_name, " ", saveptr);
+ 
+  //loop through any number of an unknown number of tokens, and separate variables and place them in argvar.
+  int iter=0;
+  while((token=strtok_r(file_name, " ", saveptr))!=NULL)
+  {
+   *esp=esp-sizeof(*token);
+   *(char *)*esp=*token;
+   argvar[iter]=(char *)&esp;
+   iter++;
+  }
+   *esp=esp-sizeof(uint8_t);
+   *(int *)*esp=0;
+  for(i=iter; i>0; i--)
+   {
+    *esp=esp-sizeof(char *);
+    *(char *)*esp=*argvar[iter];
+   }
+   *esp=esp-sizeof(&argvar);
+   *(char *)*esp=&argvar;
+   *esp=esp-sizeof(int);
+   *(int *)*esp=iter+1;
+   *esp=esp-sizeof(void *);
+   *(int *)*esp=0;
+
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
@@ -439,28 +482,6 @@ setup_stack (void **esp)
 {
   uint8_t *kpage;
   bool success = false;
-  char **token;// used in the separation of filenames and arguments
-  char *argvar[10]; // argument array. assumes less than 10 for stack size reasons.
-  char *trfn; //TRue FileName, sans arguments 
-  char **saveptr=NULL;// also used in the separation of filenames and arguments.
-  
-  //Since the filename should be the first token, this should work.
-  trfn=strtok_r(file_name, ' ', saveptr);
- 
-  //loop through any number of an unknown number of tokens, and separate variables and place them in argvar.
-  int iter=0;
-  while(token=strtok_r(file_name, ' ', saveptr)!=NULL)
-  {
-   *--esp=*token;
-   argvar[iter]=&esp;
-   iter++;
-  }
-   *--esp
-  for(i=iter; i>0; i--)
-   {
-    *--esp=argvar[iter]
-   }
-   *--esp=iter+1;
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
