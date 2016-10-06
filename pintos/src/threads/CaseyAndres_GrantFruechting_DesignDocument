@@ -1,0 +1,168 @@
+
+CIS 520 - Programming Project #1
+
+                   
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+Casey Walker Andres cwa@ksu.edu
+Grant Freuchting gfruech@ksu.edu
+...
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for
+>> the TA, or extra credit, please give them here.
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation,
+>> course text, lecture notes, and course staff.
+Citations:
+tutorialspoint.com- General C Documentation Reader
+GitHub.com Collaboration and tutorial site for git usage. Also i got some of my design inspiration from here
+This document. it helped, and i am not sure it counts as any of the omitted groups above
+
+                 ALARM CLOCK
+                 ===========
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+int64_t sleep_cycles                /*How many cycles, if any, does the thread have left to sleep. Iff not sleeping, is equal to 0*/
+
+
+---- ALGORITHMS ----
+
+>> A2: Briefly describe what happens in a call to your timer_sleep(),
+>> including the effects of the timer interrupt handler.
+
+Using blocking and the variable sleep_cycles, sets the given thread to sleep for the given tick number.
+every tick the timer interrupt handler calls the function thread_wakey() which decrements the cycle count
+if it has to, and if zero afterwards, but not before, wakes the thread up. 
+
+>> A3: What steps are taken to minimize the amount of time spent in
+>> the timer interrupt handler?
+
+a function takes us out of the literal handler. however, this may be slightly literalist. 
+
+if statement makes it so if the current thread is not blocked,  or is blocked, and the cycles are == 0, it immediately exits, minimizing the time spent.
+
+---- SYNCHRONIZATION ----
+
+>> A4: How are race conditions avoided when multiple threads call
+>> timer_sleep() simultaneously?
+
+we turn off interrupts. so everyone waits their turn.
+
+>> A5: How are race conditions avoided when a timer interrupt occurs
+>> during a call to timer_sleep()?
+
+we turn off interrupts.
+
+---- RATIONALE ----
+
+>> A6: Why did you choose this design?  In what ways is it superior to
+>> other designs that you considered?
+
+I chose this design because it gets the job done, and was similar, but much better, to the original 
+idea that i had, which had yield called once and then looped through an empty while loop to reduce calls 
+of yield, but this had still wasted the resource doing an empty while loop. I followed the concept until 
+I read the design document's little quip about including the effects of the timer interrupt handler and it all fell into place. 
+
+
+
+             PRIORITY SCHEDULING
+             ===================
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+int old priority                /*for donation keeping*/
+struct list donator             /* Donator's Identifier*/
+struct thread recipient;	/* Recipient's Identifier*/
+struct list_elem delem          /* for donator*/
+>> B2: Explain the data structure used to track priority donation.
+
+
+---- ALGORITHMS ----
+
+>> B3: How do you ensure that the highest priority thread waiting for
+>> a lock, semaphore, or condition variable wakes up first?
+
+whenever a thread is blocked or unblocked it is inserted in its proper place on the ready list.
+
+>> B4: Describe the sequence of events when a call to lock_acquire()
+>> causes a priority donation.  How is nested donation handled?
+
+if a lock that a process is trying to aquire already has a holder, it donates its priority if that would help speed things up.
+
+>> B5: Describe the sequence of events when lock_release() is called
+>> on a lock that a higher-priority thread is waiting for.
+
+it resets all priorities back to their original states with a call to thread_undonate_priority. then the scheduler takes care of the rest.
+
+---- SYNCHRONIZATION ----
+
+>> B6: Describe a potential race in thread_set_priority() and explain
+>> how your implementation avoids it.  Can you use a lock to avoid
+>> this race?
+
+if multiple threads call thread_set_priority on the same thread, then that one thread may have the incorrect priority at the end. Yes. locks are the solution to all of life's problems.
+
+---- RATIONALE ----
+
+>> B7: Why did you choose this design?  In what ways is it superior to
+>> another design you considered?
+
+Well it didn't work so we don't know what to put here.
+
+
+              ADVANCED SCHEDULER [EXTRA CREDIT]
+              =================================
+
+---- DATA STRUCTURES ----
+
+>> C1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+---- ALGORITHMS ----
+
+>> C2: Suppose threads A, B, and C have nice values 0, 1, and 2.  Each
+>> has a recent_cpu value of 0.  Fill in the table below showing the
+>> scheduling decision and the priority and recent_cpu values for each
+>> thread after each given number of timer ticks:
+
+timer  recent_cpu    priority   thread
+ticks   A   B   C   A   B   C   to run
+-----  --  --  --  --  --  --   ------
+ 0
+ 4
+ 8
+12
+16
+20
+24
+28
+32
+36
+
+>> C3: Did any ambiguities in the scheduler specification make values
+>> in the table uncertain?  If so, what rule did you use to resolve
+>> them?  Does this match the behavior of your scheduler?
+
+>> C4: How is the way you divided the cost of scheduling between code
+>> inside and outside interrupt context likely to affect performance?
+
+---- RATIONALE ----
+
+>> C5: Briefly critique your design, pointing out advantages and
+>> disadvantages in your design choices.  If you were to have extra
+>> time to work on this part of the project, how might you choose to
+>> refine or improve your design?
+
