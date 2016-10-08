@@ -15,4 +15,6 @@ int write(int fd, const void *buffer, unsigned size);
 void seek(int fd, unsigned position);
 unsigned tell(int fd);
 void close(int fd);
+void isValidPointer(void * requested_mem)
+struct file* fdToFile(int fd)
 #endif /* userprog/syscall.h */
