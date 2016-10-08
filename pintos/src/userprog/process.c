@@ -35,7 +35,7 @@ process_execute (const char *file_name)
   char *token;// used in the separation of filenames and arguments
   char *argvar[40]; // argument array. assumes less than 10 for stack size reasons.
   char *trfn; //TRue FileName, sans arguments 
-  char **saveptr=NULL;// also used in the separation of filenames and arguments.
+  char **saveptr=1;// also used in the separation of filenames and arguments.
   
   //Since the filename should be the first token, this should work.
   trfn=strtok_r(file_name, " ", saveptr);
@@ -66,7 +66,7 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-  char** saveptr=NULL;
+  char** saveptr=1;
   //Since the filename should be the first token, this should work.
   char *trfn=strtok_r(file_name_, " ", saveptr);
   char *file_name = trfn;
@@ -327,7 +327,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   char *token;// used in the separation of filenames and arguments
   char *argvar[40]; // argument array. assumes less than 10 for stack size reasons.
   char *trfn; //TRue FileName, sans arguments 
-  char **saveptr=NULL;// also used in the separation of filenames and arguments.
+  char **saveptr=1;// also used in the separation of filenames and arguments.
   
   //Since the filename should be the first token, this should work.
   trfn=strtok_r(file_name, " ", saveptr);
@@ -487,7 +487,7 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE-12;
+        *esp = PHYS_BASE-24;
       else
         palloc_free_page (kpage);
     }
