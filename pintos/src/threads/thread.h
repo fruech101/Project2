@@ -100,6 +100,10 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+    struct thread * parent;
+    struct list children;
+    struct thread * child;
+    struct list open_files;
   };
 
 /* If false (default), use round-robin scheduler.

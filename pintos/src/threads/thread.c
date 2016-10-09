@@ -204,6 +204,10 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  /* Set parent and child thread pointers */
+  t->parent = thread_current();
+  list_push_front(&(thread_current()->children), t);
+
   intr_set_level (old_level);
 
   /* Add to run queue. */
@@ -470,6 +474,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
+
+  list_init(&t->children);
+  t->parent = NULL;
+  t->child = NULL;
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
