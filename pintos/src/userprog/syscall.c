@@ -18,8 +18,7 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  printf ("system call!\n");
-  thread_exit ();
+
 }
 
 void
@@ -55,7 +54,11 @@ pid_t exec (const char * cmd_line)
 
   while (!(struct process)child_pointer->load ())
 }
-
+int wait(pid_t pid)
+{
+ if()
+ return -1;
+}
 bool create(const char *file, unsigned initial_size)
 {
  lock_acquire(&fileLock);// needed for atomicity. we need it here

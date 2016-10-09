@@ -104,6 +104,7 @@ struct thread
     struct list children;
     struct thread * child;
     struct list open_files;
+    bool iwo;// is this process's parent already waiting on this thread?'
   };
 
 /* If false (default), use round-robin scheduler.
@@ -143,3 +144,4 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 #endif /* threads/thread.h */
+
