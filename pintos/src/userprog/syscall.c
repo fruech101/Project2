@@ -16,9 +16,42 @@ syscall_init (void)
 }
 
 static void
-syscall_handler (struct intr_frame *f UNUSED) 
+syscall_handler (struct intr_frame *f) 
 {
+  typedef int syscall_function (int, int, int);
+  struct syscall
+  {
+    size_t argc;
+    syscall_function *func;
+  }
+  static const struct syscall systable[]=
+  {
+   {0,(syscall_function *) halt},
+   {1,(syscall_function *) exit),
+   (1,(syscall_function *) exec),
+   (1,(syscall_function *) wait),
+   (2,(syscall_function *) create),
+   (1,(syscall_function *) remove),
+   (1,(syscall_function *) open),
+   (1 ,(syscall_function *) filesize),
+   (3, (syscall_function *) read),
+   (3, (syscall_function *) write),
+   (2, (syscall_function *) seek),
+   (1, (syscall_function *) tell),
+   (1, (syscall_function *) close),
+   }
+  const struct syscall *sc;
+  unsigned call_nr;
+  int args[3];
+  copy_in(&call_nr, f->esp, sizeof call_nr);
+  //if invalid, exit
+  if(call_nr >= sizeof systable/sizeof *systable)
+  thread_exit ();
+  sc=systable+call_nr;
+  RARG(f, arg, call_nr);
+  f->eax =sc->func(arg[0].arg[1],arg[3]);
 
+  }
 }
 
 void
@@ -54,11 +87,13 @@ pid_t exec (const char * cmd_line)
 
   while (!(struct process)child_pointer->load ())
 }
+
 int wait(pid_t pid)
 {
  if()
  return -1;
 }
+
 bool create(const char *file, unsigned initial_size)
 {
  lock_acquire(&fileLock);// needed for atomicity. we need it here
@@ -74,12 +109,15 @@ bool win=filesys_remove(file);
 lock_release(&fileLock);
 return win;
 }
+
 void close(int fd)
 {
 
 
 
 }
+
+
 struct file* fdToFile(int fd)
 {
   struct thread cur=current_thread)();
@@ -93,6 +131,8 @@ struct file* fdToFile(int fd)
    }
   }
 }
+
+
 //Uses the file_length call and the fdToFile translator to get the file's size returns -1 if it fails
 int filesize(int fd)
 {
@@ -107,6 +147,8 @@ lock_acquire(&fileLock);
  lock_release(&fileLock);
  return ret;
 }
+
+
 void seek(int fd, unsigned position)
 {
 lock_acquire(&fileLock);
@@ -119,6 +161,8 @@ lock_acquire(&fileLock);
  file_seek(entry, position);
  lock_release(&fileLock);
 }
+
+
 unsigned tell(int fd)
 {
 lock_acquire(&fileLock);
@@ -132,12 +176,47 @@ lock_acquire(&fileLock);
  lock_release(&fileLock);
  return ret;
 }
-
+//Quality of Life section
 void
 isValidPointer (void *requested_mem)
 {
   if(*requested_mem == NULL || !is_user_vaddr(requested_mem))
   {
-    exit ();
+    exit (-1);
   }
+}
+//rolls through buffer that starts at bSt (buffer Start) and is of size s, checking if it is valid
+void
+buffCheck(void * bSt, unsigned s)
+{
+ char* lSt=(char *)bSt; //local copy of bSt so there is no unintentional alterations
+ for(int i=0; i<s; i++)
+ {
+  isValidPointer(lSt);
+  lSt++;
+ }
+
+}
+//USer to KeRnel pointer Translator.
+//takes user pointer usr and returns the kernel address using given pagedir functions.
+int uskrt(const void* usr)
+{
+  isValidPointer(usr);
+  void *kpt = pagedir_get_page(thread_current()->pagedir, usr)
+  if(!kpt)
+  {
+   exit(-1);  
+  }
+  return (int) ptr;
+}
+//Returns ARGuments
+void RARG(struct intr_frame *f, int *arg, int a )
+{
+  int *hld; //holds things
+  for(int i=0; i<a; a++)
+    {
+     ptr=(int *) f->esp+a+1;
+     isValidPointer((const void *) hld);
+     arg[i]=hld;
+    }
 }
