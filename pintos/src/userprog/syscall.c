@@ -1,6 +1,7 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include <stdlib.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "filesys/filesys.h"
@@ -10,9 +11,10 @@
 #include "threads/thread.h"
 #include "filesys/file.h"
 #include "threads/synch.h"
-#include "threads/interrupt.h"
 #include <stdbool.h>
 #include "devices/input.h"
+#include "devices/shutdown.h"
+#include "user/syscall.h"
 #include "filesys/filesys.h"
 static void syscall_handler (struct intr_frame *);
 
@@ -31,26 +33,26 @@ syscall_handler (struct intr_frame *f)
   typedef int syscall_function (int, int, int);
   struct syscall
   {
-    size_t argc;
+    int argc;
     syscall_function *func;
-  }
-  static const struct syscall systable[]=
+  };
+  const struct syscall systable[]=
   {
-   {0,(syscall_function *) halt},
-   {1,(syscall_function *) exit),
+   (0,(syscall_function *) halt),
+   (1,(syscall_function *) exit),
    (1,(syscall_function *) exec),
    (1,(syscall_function *) wait),
    (2,(syscall_function *) create),
    (1,(syscall_function *) remove),
    (1,(syscall_function *) open),
-   (1 ,(syscall_function *) filesize),
-   (3, (syscall_function *) read),
-   (3, (syscall_function *) write),
-   (2, (syscall_function *) seek),
-   (1, (syscall_function *) tell),
-   (1, (syscall_function *) close),
-   }
-  const struct syscall *sc;
+   (1,(syscall_function *) filesize),
+   (3,(syscall_function *) read),
+   (3,(syscall_function *) write),
+   (2,(syscall_function *) seek),
+   (1,(syscall_function *) tell),
+   (1,(syscall_function *) close),
+   };
+  struct syscall *sc;
   unsigned call_nr;
   int args[3];
   copy_in(&call_nr, f->esp, sizeof call_nr);
@@ -58,10 +60,10 @@ syscall_handler (struct intr_frame *f)
   if(call_nr >= sizeof systable/sizeof *systable)
   thread_exit ();
   sc=systable+call_nr;
-  RARG(f, arg, call_nr);
-  f->eax =sc->func(arg[0].arg[1],arg[3]);
+  RARG(f, args, call_nr);
+  f->eax =sc->func(arg[0],arg[1],arg[3]);
 
-  }
+  
 }
 
 void
@@ -98,7 +100,7 @@ pid_t exec (const char * cmd_line)
   while (!(struct process)child_pointer->load ())
 }
 
-int wait(pid_t pid)
+pid_t wait(pid_t pid)
 {
  if()
  return -1;
