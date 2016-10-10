@@ -103,14 +103,13 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
     struct thread * parent;
     struct list children;
+    struct list_elem child_elem;
     struct thread * child;
     struct list open_files; //List of file descriptors
+    struct list_elem open_files_elem;
     bool is_waited_on;
     bool has_loaded;
-    struct condition load_wait; //condition variable for exec syscall
-    struct lock exec_lock;
-
-
+    struct semaphore load_wait;
   };
 
   /* Owned by syscall.c. */
@@ -120,17 +119,17 @@ struct thread
   /* Track the completion of a process.
        Reference held by both the parent, in its `children' list,
        and by the child, in its `wait_status' pointer. */
-struct wait_status
-{
-  struct list_elem elem;              /* `children' list element. */
-  struct lock ref_cnt_lock;           /* Protects ref_cnt. */
-  int ref_cnt;                        /* 2=child and parent both alive,
-                                         1=either child or parent alive,
-                                         0=child and parent both dead.*/
-  tid_t tid;                          /* Child thread id. */
-  int exit_code;                      /* Child exit code, if dead. */
-  struct semaphore dead;              /* 0=child alive, 1=child dead. */
-}
+//struct wait_status
+//{
+//  struct list_elem elem;              /* `children' list element. */
+//  struct lock ref_cnt_lock;           /* Protects ref_cnt. */
+//  int ref_cnt;                        /* 2=child and parent both alive,
+//                                         1=either child or parent alive,
+//                                         0=child and parent both dead.*/
+//  tid_t tid;                          /* Child thread id. */
+//  int exit_code;                      /* Child exit code, if dead. */
+// struct semaphore dead;              /* 0=child alive, 1=child dead. */
+//}
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

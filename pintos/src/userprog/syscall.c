@@ -27,32 +27,35 @@ syscall_handler (struct intr_frame *f)
   }
   static const struct syscall systable[]=
   {
-   {0,(syscall_function *) halt},
-   {1,(syscall_function *) exit),
-   (1,(syscall_function *) exec),
-   (1,(syscall_function *) wait),
-   (2,(syscall_function *) create),
-   (1,(syscall_function *) remove),
-   (1,(syscall_function *) open),
-   (1 ,(syscall_function *) filesize),
-   (3, (syscall_function *) read),
-   (3, (syscall_function *) write),
-   (2, (syscall_function *) seek),
-   (1, (syscall_function *) tell),
-   (1, (syscall_function *) close),
-   }
+   {0, (syscall_function *) halt},
+   {1, (syscall_function *) exit},
+   {1, (syscall_function *) exec},
+   {1, (syscall_function *) wait},
+   {2, (syscall_function *) create},
+   {1, (syscall_function *) remove},
+   {1, (syscall_function *) open},
+   {1, (syscall_function *) filesize},
+   {3, (syscall_function *) read},
+   {3, (syscall_function *) write},
+   {2, (syscall_function *) seek},
+   {1, (syscall_function *) tell},
+   {1, (syscall_function *) close},
+  }
   const struct syscall *sc;
-  unsigned call_nr;
+  unsigned int call_nr;
   int args[3];
-  copy_in(&call_nr, f->esp, sizeof call_nr);
+  memcpy(&call_nr, f->esp, sizeof(f->esp));
   //if invalid, exit
   if(call_nr >= sizeof systable/sizeof *systable)
-  thread_exit ();
+    thread_exit ();
   sc=systable+call_nr;
-  RARG(f, arg, call_nr);
-  f->eax =sc->func(arg[0].arg[1],arg[3]);
+  //RARG(f, arg, call_nr); //get the arguments into arg[];
 
-  }
+  ASSERT (sc->arg_cnt <= sizeof args / sizeof *args); 
+  memset (args, 0, sizeof args);
+  memcpy(args, (uint32_t *) f->esp + 1, sizeof *args * sc->arg_cnt);
+
+  f->eax = sc->func(arg[0], arg[1], arg[3]);
 }
 
 void
@@ -66,14 +69,16 @@ exit (int status)
 {
   enum intr_level old_level = intr_disable ();
   struct thread * par = thread_current()->parent;
+  struct thread * child_ptr;
 
   //find the calling thread in the parent's child list
   struct list_elem e;
-  for (e=list_begin(&par->children), e != list_end(&par->children), e = list_next(e)) )
+  for (e=list_begin(&par->children); e != list_end(&par->children); e = list_next(e)) )
   {
+    child_ptr = list_entry(e, struct thread, child_elem);
     if (e == thread_current())
     {
-      par->child=e;
+      par->child=child_ptr;
     }
   }
 
@@ -90,41 +95,144 @@ pid_t exec (const char * cmd_line)
 {
   struct thread * cur = thread_current();
   pid_t pid = process_execute (cmd_line);
-  struct thread * chi;
+  struct thread * child_ptr;
 
   //find the child thread in this thread's calling list
-  for (e=list_begin(&cur->children), e != list_end(&cur->children), e = list_next(e))
+  struct list_elem *e;
+  for (e = list_begin (&cur->children); e != list_end (&cur->children); e = list_next(e))
   {
-    if(e->pid == pid)
+    child_ptr = list_entry(e, struct thread, child_elem);
+    if (*child_ptr->tid == pid)
     {
-      cur->child == e;
+      cur->child = child_ptr;
     }
   }
 
   //wait for child to load
-  cond_wait(&load_wait, &exec_lock);
+  if(cur->child->is_waited_on)
+  {
+    sema_down (&cur->child->load_wait);
+  }
+  return pid;
 }
 
 int wait(pid_t pid)
 {
- if()
+ //not yet implemented
  return -1;
 }
 
 bool create(const char *file, unsigned initial_size)
 {
- lock_acquire(&fileLock);// needed for atomicity. we need it here
- bool win=filesys_create(file, initial_size); // Create the file using the given function
- lock_release(&fileLock);
- return win;
+  lock_acquire(&fileLock);// needed for atomicity. we need it here
+  bool win=filesys_create(file, initial_size); // Create the file using the given function
+  lock_release(&fileLock);
+  return win; // #winning
 }
 
 bool remove(const char *file)
 {
-lock_acquire(&fileLock);
-bool win=filesys_remove(file);
-lock_release(&fileLock);
-return win;
+  lock_acquire(&fileLock);
+  bool win=filesys_remove(file);
+  lock_release(&fileLock);
+  return win;
+}
+
+int open(const char * file) 
+{
+  lock_acquire(&fileLock);
+  struct file *opened = filesys_open(file);
+  if (opened==NULL)
+  {
+    lock_release(&fileLock);
+    return -1;
+  }
+//not done yet
+
+}
+
+//Uses the file_length call and the fdToFile translator to get the file's size returns -1 if it fails
+int filesize(int fd)
+{
+  lock_acquire(&fileLock);
+  struct file *entry=fdToFile(fd);
+  if(entry==NULL)
+  {
+    lock_release(&fileLock);
+    return -1;
+  }
+  int ret=file_length(entry);
+  lock_release(&fileLock);
+  return ret;
+}
+
+int read (int fd, void * buffer, unsigned size)
+{
+  if(fd == 0) //if it is keyboard input
+  {
+    for (int i = 0; i < size; i++)
+    {
+      (uint8_t)buffer[i] = input_getc();
+    }
+    return size;
+  }
+  lock_acquire(&fileLock);
+  struct file *entry=fdToFile(fd);
+  if(entry==NULL)
+  {
+    lock_release(&fileLock);
+    return -1;
+  }
+  int ret = file_read(entry, buffer, size);
+  lock_release(&fileLock);
+  return ret;
+}
+
+int write (int fd, const void * buffer, unsigned size)
+{
+  if(fd == 1) //if it is console output
+  {
+    putbuf((char *)buffer, size);
+    return size;
+  }
+  lock_acquire(&fileLock);
+  struct file *entry=fdToFile(fd);
+  if(entry==NULL)
+  {
+    lock_release(&fileLock);
+    return -1;
+  }
+  int ret = file_write(entry, buffer, size);
+  lock_release(&fileLock);
+  return ret;
+}
+
+void seek(int fd, unsigned position)
+{
+  lock_acquire(&fileLock);
+  struct file *entry=fdToFile(fd);
+  if(entry==NULL)
+  {
+    lock_release(&fileLock);
+    return;
+  }
+  file_seek(entry, position);
+  lock_release(&fileLock);
+}
+
+
+unsigned tell(int fd)
+{
+  lock_acquire(&fileLock);
+  struct file *entry=fdToFile(fd);
+  if(!entry)//Pointers are false if null, thank you stackOverflow!
+  {
+    lock_release(&fileLock);
+    return -1;
+  }
+  unsigned ret=file_tell(fd);
+  lock_release(&fileLock);
+  return ret;
 }
 
 void close(int fd)
@@ -135,64 +243,6 @@ void close(int fd)
 }
 
 
-struct file* fdToFile(int fd)
-{
-  struct thread cur=current_thread)();
-  struct list_elem e;
-  for(e=list_begin(&cur->open_files),e!=list_end(&cur->open_files), e=list_next(e))
-  {
-   struct file tf=list_entry(e, struct file, elem);
-   if(tf->fd==fd)
-   {
-    return tf->file;     
-   }
-  }
-}
-
-
-//Uses the file_length call and the fdToFile translator to get the file's size returns -1 if it fails
-int filesize(int fd)
-{
-lock_acquire(&fileLock);
- struct file *entry=fdToFile(fd);
- if(entry==NULL)
- {
-  lock_release(&fileLock);
-  return -1;
- }
- int ret=file_length(entry);
- lock_release(&fileLock);
- return ret;
-}
-
-
-void seek(int fd, unsigned position)
-{
-lock_acquire(&fileLock);
- struct file *entry=fdToFile(fd);
- if(entry==NULL)
- {
-  lock_release(&fileLock);
-  return
- }
- file_seek(entry, position);
- lock_release(&fileLock);
-}
-
-
-unsigned tell(int fd)
-{
-lock_acquire(&fileLock);
- struct file *entry=fdToFile(fd);
- if(!entry)//Pointers are false if null, thank you stackOverflow!
- {
-  lock_release(&fileLock);
-  return -1;
- }
- unsigned ret=file_tell(fd);
- lock_release(&fileLock);
- return ret;
-}
 //Quality of Life section
 void
 isValidPointer (void *requested_mem)
@@ -236,4 +286,18 @@ void RARG(struct intr_frame *f, int *arg, int a )
      isValidPointer((const void *) hld);
      arg[i]=hld;
     }
+}
+/*gets file with file descriptor fd from the process's open_files list.*/
+struct file* fdToFile(int fd)
+{
+  struct thread cur=current_thread)();
+  struct list_elem e;
+  for(e=list_begin(&cur->open_files); e!=list_end(&cur->open_files); e=list_next(e))
+  {
+   struct file tf=list_entry(e, struct file, open_files_elem);
+   if(tf->fd==fd)
+   {
+    return tf->file;     
+   }
+  }
 }

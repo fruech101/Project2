@@ -172,9 +172,6 @@ thread_create (const char *name, int priority,
   struct switch_entry_frame *ef;
   struct switch_threads_frame *sf;
   tid_t tid;
-  iwo=false;// it means that no parent process is not waiting for it. it shouldn't be, yet.
-  int loaded=0;// hasn't been loaded yet, so this makes sense would normally be a bool, but i realized
-               //we needed 3 possible endings, unloaded, loaded, and load failed, so i used an int 0,1,2 respectively
   enum intr_level old_level;
 
   ASSERT (function != NULL);
@@ -209,8 +206,8 @@ thread_create (const char *name, int priority,
   sf->ebp = 0;
 
   /* Set parent and child thread pointers */
-  t->parent = thread_current()->pid;
-  list_push_front(&(thread_current()->children), t);
+  t->parent = thread_current();
+  list_push_front(&thread_current()->children, &t->elem);
 
   intr_set_level (old_level);
 
@@ -478,10 +475,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
-
-  list_init(&t->children);
+  //Project 2 changes
   t->parent = NULL;
+  list_init(&t->children);
   t->child = NULL;
+  list_init(&t->open_files);
+  t->is_waited_on = false;
+  t->has_loaded = false;
+  sema_init(&t->load_wait, 0);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
