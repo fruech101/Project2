@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -93,19 +94,43 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
-#ifdef USERPROG
-    /* Owned by userprog/process.c. */
-    uint32_t *pagedir;                  /* Page directory. */
-#endif
+    #ifdef USERPROG
+      /* Owned by userprog/process.c. */
+      uint32_t *pagedir;                  /* Page directory. */
+    #endif
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
     struct thread * parent;
     struct list children;
     struct thread * child;
-    struct list open_files;
-    bool iwo;// is this process's parent already waiting on this thread?'
+    struct list open_files; //List of file descriptors
+    bool is_waited_on;
+    bool has_loaded;
+    struct condition load_wait; //condition variable for exec syscall
+    struct lock exec_lock;
+
+
   };
+
+  /* Owned by syscall.c. */
+  //struct list fds;       /* List of file descriptors. */
+  //int next_handle;     /* Next handle value. */
+  
+  /* Track the completion of a process.
+       Reference held by both the parent, in its `children' list,
+       and by the child, in its `wait_status' pointer. */
+struct wait_status
+{
+  struct list_elem elem;              /* `children' list element. */
+  struct lock ref_cnt_lock;           /* Protects ref_cnt. */
+  int ref_cnt;                        /* 2=child and parent both alive,
+                                         1=either child or parent alive,
+                                         0=child and parent both dead.*/
+  tid_t tid;                          /* Child thread id. */
+  int exit_code;                      /* Child exit code, if dead. */
+  struct semaphore dead;              /* 0=child alive, 1=child dead. */
+}
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

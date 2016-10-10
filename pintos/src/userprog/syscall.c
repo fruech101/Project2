@@ -3,6 +3,7 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include <semaphore.h>
 
 static void syscall_handler (struct intr_frame *);
 
@@ -64,9 +65,22 @@ void
 exit (int status)
 {
   enum intr_level old_level = intr_disable ();
-  if (*parent->status == THREAD_RUNNING)
+  struct thread * par = thread_current()->parent;
+
+  //find the calling thread in the parent's child list
+  struct list_elem e;
+  for (e=list_begin(&par->children), e != list_end(&par->children), e = list_next(e)) )
   {
-    parent->status = status;
+    if (e == thread_current())
+    {
+      par->child=e;
+    }
+  }
+
+  //if the parent thread waits on the child, return child's status to parent
+  if (par->child->ws)
+  {
+    par->status = status;
   }
   thread_exit ();
   intr_set_level (old level);
@@ -75,17 +89,20 @@ exit (int status)
 pid_t exec (const char * cmd_line)
 {
   struct thread * cur = thread_current();
-  pit_t pid = process_execute (cmd_line);
-  struct thread * child_pointer;
+  pid_t pid = process_execute (cmd_line);
+  struct thread * chi;
+
+  //find the child thread in this thread's calling list
   for (e=list_begin(&cur->children), e != list_end(&cur->children), e = list_next(e))
   {
     if(e->pid == pid)
     {
-      child_pointer == e->pid;
+      cur->child == e;
     }
   }
 
-  while (!(struct process)child_pointer->load ())
+  //wait for child to load
+  cond_wait(&load_wait, &exec_lock);
 }
 
 int wait(pid_t pid)

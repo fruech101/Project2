@@ -13,6 +13,7 @@
 #include "threads/vaddr.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "userprog/syscall.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -208,7 +209,7 @@ thread_create (const char *name, int priority,
   sf->ebp = 0;
 
   /* Set parent and child thread pointers */
-  t->parent = thread_current();
+  t->parent = thread_current()->pid;
   list_push_front(&(thread_current()->children), t);
 
   intr_set_level (old_level);

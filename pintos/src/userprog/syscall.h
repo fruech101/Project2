@@ -22,7 +22,8 @@ struct bs
 {
 pid_t pid;
 bool iwo;//Is Waited On
-int sh;//Status Holder
+int sh;//exit status holder
+int lh;//load status holder 0 = unloaded, 1 = loaded, 2 = failed
 struct list_elem elem;//needs to be listable.
 }
 #endif /* userprog/syscall.h */
