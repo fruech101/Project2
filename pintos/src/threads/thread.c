@@ -172,7 +172,7 @@ thread_create (const char *name, int priority,
   struct switch_entry_frame *ef;
   struct switch_threads_frame *sf;
   tid_t tid;
-  iwo=false;// it means that no parent process is not waiting for it. it shouldn't be, yet.
+  t->iwo=false;// it means that no parent process is not waiting for it. it shouldn't be, yet.
   int loaded=0;// hasn't been loaded yet, so this makes sense would normally be a bool, but i realized
                //we needed 3 possible endings, unloaded, loaded, and load failed, so i used an int 0,1,2 respectively
   enum intr_level old_level;

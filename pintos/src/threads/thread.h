@@ -105,8 +105,9 @@ struct thread
     struct list children;
     struct thread * child;
     struct list open_files; //List of file descriptors
-    bool is_waited_on;
+    bool iwo;
     bool has_loaded;
+    int pid;
     struct condition load_wait; //condition variable for exec syscall
     struct lock exec_lock;
 
@@ -130,7 +131,7 @@ struct wait_status
   tid_t tid;                          /* Child thread id. */
   int exit_code;                      /* Child exit code, if dead. */
   struct semaphore dead;              /* 0=child alive, 1=child dead. */
-}
+};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

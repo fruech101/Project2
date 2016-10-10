@@ -3,8 +3,17 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
-#include <semaphore.h>
-
+#include "filesys/filesys.h"
+#include "threads/vaddr.h"
+#include "userprog/pagedir.h"
+#include "userprog/process.h"
+#include "threads/thread.h"
+#include "filesys/file.h"
+#include "threads/synch.h"
+#include "threads/interrupt.h"
+#include <stdbool.h>
+#include "devices/input.h"
+#include "filesys/filesys.h"
 static void syscall_handler (struct intr_frame *);
 
 struct lock fileLock;
@@ -65,22 +74,9 @@ void
 exit (int status)
 {
   enum intr_level old_level = intr_disable ();
-  struct thread * par = thread_current()->parent;
-
-  //find the calling thread in the parent's child list
-  struct list_elem e;
-  for (e=list_begin(&par->children), e != list_end(&par->children), e = list_next(e)) )
+  if (*parent->status == THREAD_RUNNING)
   {
-    if (e == thread_current())
-    {
-      par->child=e;
-    }
-  }
-
-  //if the parent thread waits on the child, return child's status to parent
-  if (par->child->ws)
-  {
-    par->status = status;
+    parent->status = status;
   }
   thread_exit ();
   intr_set_level (old level);
@@ -89,20 +85,17 @@ exit (int status)
 pid_t exec (const char * cmd_line)
 {
   struct thread * cur = thread_current();
-  pid_t pid = process_execute (cmd_line);
-  struct thread * chi;
-
-  //find the child thread in this thread's calling list
+  pit_t pid = process_execute (cmd_line);
+  struct thread * child_pointer;
   for (e=list_begin(&cur->children), e != list_end(&cur->children), e = list_next(e))
   {
     if(e->pid == pid)
     {
-      cur->child == e;
+      child_pointer == e->pid;
     }
   }
 
-  //wait for child to load
-  cond_wait(&load_wait, &exec_lock);
+  while (!(struct process)child_pointer->load ())
 }
 
 int wait(pid_t pid)
@@ -126,7 +119,18 @@ bool win=filesys_remove(file);
 lock_release(&fileLock);
 return win;
 }
-
+int open(const char *file)
+{
+ lock_acquire(&fileLock);
+ struct file *cf=filesys_open(file);
+ if(!cf)
+  {
+   lock_release(&fileLock);
+   return -1;    
+  }
+  
+  lock_relase(&fileLock);
+}
 void close(int fd)
 {
 
@@ -173,7 +177,7 @@ lock_acquire(&fileLock);
  if(entry==NULL)
  {
   lock_release(&fileLock);
-  return
+  return;
  }
  file_seek(entry, position);
  lock_release(&fileLock);
@@ -197,7 +201,7 @@ lock_acquire(&fileLock);
 void
 isValidPointer (void *requested_mem)
 {
-  if(*requested_mem == NULL || !is_user_vaddr(requested_mem))
+  if(requested_mem == NULL || !is_user_vaddr(requested_mem))
   {
     exit (-1);
   }
@@ -219,20 +223,20 @@ buffCheck(void * bSt, unsigned s)
 int uskrt(const void* usr)
 {
   isValidPointer(usr);
-  void *kpt = pagedir_get_page(thread_current()->pagedir, usr)
+  void *kpt = pagedir_get_page(thread_current()->pagedir, usr);
   if(!kpt)
   {
    exit(-1);  
   }
-  return (int) ptr;
+  return (int) kpt;
 }
 //Returns ARGuments
-void RARG(struct intr_frame *f, int *arg, int a )
+void RARG(struct intr_frame *f, int *arg, int a)
 {
   int *hld; //holds things
   for(int i=0; i<a; a++)
     {
-     ptr=(int *) f->esp+a+1;
+     hld=(int *) f->esp+a+1;
      isValidPointer((const void *) hld);
      arg[i]=hld;
     }
