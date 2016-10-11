@@ -1,13 +1,30 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include <user/syscall.h>
+#include <string.h>
+#include "devices/input.h"
+#include "devices/shutdown.h"
+#include "filesys/file.h"
+#include "filesys/filesys.h"
 #include "threads/interrupt.h"
+#include "threads/malloc.h"
+#include "threads/synch.h"
 #include "threads/thread.h"
-#include <semaphore.h>
+#include "threads/vaddr.h"
+#include "userprog/pagedir.h"
+#include "userprog/process.h"
 
 static void syscall_handler (struct intr_frame *);
 
 struct lock fileLock;
+
+static void syscall_handler (struct intr_frame *f);
+void isValidPointer (void *requested_mem);
+void buffCheck(void * bSt, unsigned s);
+int uskrt(const void* usr);
+void RARG(struct intr_frame *f, int *arg, int a );
+struct file* fdToFile(int fd);
 
 void
 syscall_init (void) 
@@ -24,7 +41,8 @@ syscall_handler (struct intr_frame *f)
   {
     size_t argc;
     syscall_function *func;
-  }
+  };
+
   static const struct syscall systable[]=
   {
    {0, (syscall_function *) halt},
@@ -40,22 +58,22 @@ syscall_handler (struct intr_frame *f)
    {2, (syscall_function *) seek},
    {1, (syscall_function *) tell},
    {1, (syscall_function *) close},
-  }
+  };
   const struct syscall *sc;
   unsigned int call_nr;
   int args[3];
-  memcpy(&call_nr, f->esp, sizeof(f->esp));
+  memcpy(&call_nr, f->esp, sizeof(&f->esp));
   //if invalid, exit
-  if(call_nr >= sizeof systable/sizeof *systable)
+  if(call_nr >= sizeof(systable)/sizeof(*systable))
     thread_exit ();
   sc=systable+call_nr;
   //RARG(f, arg, call_nr); //get the arguments into arg[];
 
-  ASSERT (sc->arg_cnt <= sizeof args / sizeof *args); 
-  memset (args, 0, sizeof args);
-  memcpy(args, (uint32_t *) f->esp + 1, sizeof *args * sc->arg_cnt);
+  ASSERT (sc->argc <= sizeof(args) / sizeof (*args)); 
+  memset (args, 0, sizeof(args));
+  memcpy(args, (uint32_t *) f->esp + 1, sizeof( *args * sc->argc));
 
-  f->eax = sc->func(arg[0], arg[1], arg[3]);
+  f->eax = sc->func(args[0], args[1], args[3]);
 }
 
 void
@@ -72,23 +90,23 @@ exit (int status)
   struct thread * child_ptr;
 
   //find the calling thread in the parent's child list
-  struct list_elem e;
-  for (e=list_begin(&par->children); e != list_end(&par->children); e = list_next(e)) )
+  struct list_elem * e;
+  for (e=list_begin(&par->children); e != list_end(&par->children); e = list_next(e))
   {
     child_ptr = list_entry(e, struct thread, child_elem);
-    if (e == thread_current())
+    if (child_ptr == thread_current())
     {
       par->child=child_ptr;
     }
   }
 
   //if the parent thread waits on the child, return child's status to parent
-  if (par->child->ws)
+  if (par->child->is_waited_on)
   {
     par->status = status;
   }
   thread_exit ();
-  intr_set_level (old level);
+  intr_set_level (old_level);
 }
 
 pid_t exec (const char * cmd_line)
@@ -102,7 +120,7 @@ pid_t exec (const char * cmd_line)
   for (e = list_begin (&cur->children); e != list_end (&cur->children); e = list_next(e))
   {
     child_ptr = list_entry(e, struct thread, child_elem);
-    if (*child_ptr->tid == pid)
+    if (child_ptr->tid == pid)
     {
       cur->child = child_ptr;
     }
@@ -168,11 +186,13 @@ int filesize(int fd)
 
 int read (int fd, void * buffer, unsigned size)
 {
+  uint8_t * casted = (uint8_t *)buffer;
   if(fd == 0) //if it is keyboard input
   {
-    for (int i = 0; i < size; i++)
+    for (int i = 0; i < (int)size; i++)
     {
-      (uint8_t)buffer[i] = input_getc();
+      casted[i] = input_getc();
+      buffer = casted;
     }
     return size;
   }
@@ -230,7 +250,7 @@ unsigned tell(int fd)
     lock_release(&fileLock);
     return -1;
   }
-  unsigned ret=file_tell(fd);
+  unsigned ret=file_tell(entry);
   lock_release(&fileLock);
   return ret;
 }
@@ -247,7 +267,7 @@ void close(int fd)
 void
 isValidPointer (void *requested_mem)
 {
-  if(*requested_mem == NULL || !is_user_vaddr(requested_mem))
+  if(requested_mem == NULL || !is_user_vaddr(requested_mem))
   {
     exit (-1);
   }
@@ -257,7 +277,7 @@ void
 buffCheck(void * bSt, unsigned s)
 {
  char* lSt=(char *)bSt; //local copy of bSt so there is no unintentional alterations
- for(int i=0; i<s; i++)
+ for(int i=0; i<(int)s; i++)
  {
   isValidPointer(lSt);
   lSt++;
@@ -269,12 +289,12 @@ buffCheck(void * bSt, unsigned s)
 int uskrt(const void* usr)
 {
   isValidPointer(usr);
-  void *kpt = pagedir_get_page(thread_current()->pagedir, usr)
+  void *kpt = pagedir_get_page(thread_current()->pagedir, usr);
   if(!kpt)
   {
    exit(-1);  
   }
-  return (int) ptr;
+  return (int) kpt;
 }
 //Returns ARGuments
 void RARG(struct intr_frame *f, int *arg, int a )
@@ -282,19 +302,20 @@ void RARG(struct intr_frame *f, int *arg, int a )
   int *hld; //holds things
   for(int i=0; i<a; a++)
     {
-     ptr=(int *) f->esp+a+1;
-     isValidPointer((const void *) hld);
-     arg[i]=hld;
+     hld=(int *) f->esp+a+1;
+     isValidPointer((void *) hld);
+     arg[i]=*hld;
     }
 }
 /*gets file with file descriptor fd from the process's open_files list.*/
 struct file* fdToFile(int fd)
 {
-  struct thread cur=current_thread)();
-  struct list_elem e;
+  struct thread *cur=thread_current();
+  struct list_elem *e;
+  struct file * tf;
   for(e=list_begin(&cur->open_files); e!=list_end(&cur->open_files); e=list_next(e))
   {
-   struct file tf=list_entry(e, struct file, open_files_elem);
+   tf=list_entry(e, struct file, open_files_elem);
    if(tf->fd==fd)
    {
     return tf->file;     
