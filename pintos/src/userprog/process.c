@@ -110,7 +110,44 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 { 
-  return -1;
+  int status;
+  struct thread * cur = thread_current();
+  struct list_elem *e;
+  struct thread *child_ptr = NULL;
+  //find the child thread in the calling thread's children list
+  for (e = list_begin (&(cur->children)); e != list_end (&(cur->children)); e = list_next(e))
+  {
+    child_ptr = list_entry(e, struct thread, child_elem);
+    if (child_ptr->tid == child_tid)
+    {
+      cur->child = child_ptr;
+    }
+  }
+  //verify that the thread child_tid is a child of the calling thread
+  if(cur->child == NULL)
+  {
+    return -1;
+  }
+  //verify that process_wait() has not already been called on child_tid
+  struct thread *thrd_ptr = child_ptr;
+  for (e = list_begin (&(cur->threads_waited_on));
+        e != list_end (&(cur->threads_waited_on)); e = list_next(e))
+  {
+    thrd_ptr = list_entry(e, struct thread, waited_elem);
+    if (thrd_ptr->tid == child_tid)
+    {
+      return -1;
+    }
+  }
+  lock_acquire(&wait_lock);
+  cur->child->is_waited_on = TRUE;
+  //add thread with child_tid to current thread's threads_waited_on list
+  list_push_front(&(cur->threads_waited_on),&(cur->child->waited_elem));
+  cond_wait(&(cur->exited), &(cur->wait_lock));
+  //not done yet
+
+
+
 }
 
 /* Free the current process's resources. */

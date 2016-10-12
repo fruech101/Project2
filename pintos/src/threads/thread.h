@@ -95,15 +95,21 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
+
     struct thread * parent;
     struct list children;
     struct list_elem child_elem;
     struct thread * child;
     struct list open_files; //List of file descriptors
-    struct list_elem open_files_elem;
     bool is_waited_on;
     bool has_loaded;
     struct semaphore load_wait;
+    struct lock wait_lock;//need to initialize
+    struct condition exited; //need to initialize
+    bool is_blocked;//need to initialize
+    struct list threads_waited_on;//need to initialize
+    struct list elem waited_elem;//need to initialize
   };
 
   /* Owned by syscall.c. */

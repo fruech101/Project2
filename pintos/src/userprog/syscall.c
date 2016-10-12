@@ -19,6 +19,12 @@ static void syscall_handler (struct intr_frame *);
 
 struct lock fileLock;
 
+struct file_struct {
+  struct file * f;
+  struct list_elem file_elem;
+  int f_descriptor;
+};
+
 static void syscall_handler (struct intr_frame *f);
 void isValidPointer (void *requested_mem);
 void buffCheck(void * bSt, unsigned s);
@@ -73,7 +79,7 @@ syscall_handler (struct intr_frame *f)
   memset (args, 0, sizeof(args));
   memcpy(args, (uint32_t *) f->esp + 1, sizeof( *args * sc->argc));
 
-  f->eax = sc->func(args[0], args[1], args[3]);
+  f->eax = sc->func(args[0], args[1], args[2]);
 }
 
 void
@@ -115,7 +121,7 @@ pid_t exec (const char * cmd_line)
   pid_t pid = process_execute (cmd_line);
   struct thread * child_ptr;
 
-  //find the child thread in this thread's calling list
+  //find the child thread in the calling thread's children list
   struct list_elem *e;
   for (e = list_begin (&cur->children); e != list_end (&cur->children); e = list_next(e))
   {
@@ -137,7 +143,7 @@ pid_t exec (const char * cmd_line)
 int wait(pid_t pid)
 {
  //not yet implemented
- return -1;
+ return process_wait(pid);
 }
 
 bool create(const char *file, unsigned initial_size)
@@ -165,6 +171,11 @@ int open(const char * file)
     lock_release(&fileLock);
     return -1;
   }
+  struct file_struct *new_file = malloc(sizeof(struct file_struct*));
+  new_file->f_descriptor = (int)list_size(&(thread_current()->open_files))+2;
+  new_file->f = opened;
+  list_push_front(&(thread_current()->open_files), &new_file->file_elem);
+  return new_file->f_descriptor;
 //not done yet
 
 }
@@ -257,9 +268,18 @@ unsigned tell(int fd)
 
 void close(int fd)
 {
-
-
-
+  struct thread * cur = thread_current();
+  struct list_elem *e;
+  struct file_struct * file_ptr;
+  struct list_elem * garbage;
+  for(e=list_begin(&(cur->open_files)); e!=list_end(&(cur->open_files)); e=list_next(e))
+  {
+   file_ptr=list_entry(e, struct file_struct, file_elem);
+   if((file_ptr->f_descriptor)==fd)
+   {
+    garbage = list_remove(e);
+   }
+  }
 }
 
 
@@ -312,13 +332,14 @@ struct file* fdToFile(int fd)
 {
   struct thread *cur=thread_current();
   struct list_elem *e;
-  struct file * tf;
+  struct file_struct * file_ptr;
   for(e=list_begin(&cur->open_files); e!=list_end(&cur->open_files); e=list_next(e))
   {
-   tf=list_entry(e, struct file, open_files_elem);
-   if(tf->fd==fd)
+   file_ptr=list_entry(e, struct file_struct, file_elem);
+   if((file_ptr->f_descriptor)==fd)
    {
-    return tf->file;     
+    return file_ptr->f;     
    }
   }
+  return NULL;
 }
