@@ -299,6 +299,10 @@ thread_exit (void)
   intr_disable ();
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
+  if(thread_current()->is_blocked)
+  {
+    cond_signal(&(thread_current()->exited), &(thread_current()->parent->wait_lock));
+  }
   schedule ();
   NOT_REACHED ();
 }
@@ -473,7 +477,11 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->open_files);
   t->is_waited_on = false;
   t->has_loaded = false;
-  sema_init(&t->load_wait, 0);
+  sema_init(&(t->load_wait), 0);
+  lock_init(&(t->wait_lock));
+  cond_init(&(t->exited));
+  t->is_blocked = false;
+  list_init(&(t->threads_waited_on));
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

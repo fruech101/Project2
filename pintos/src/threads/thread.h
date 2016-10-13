@@ -105,11 +105,11 @@ struct thread
     bool is_waited_on;
     bool has_loaded;
     struct semaphore load_wait;
-    struct lock wait_lock;//need to initialize
-    struct condition exited; //need to initialize
-    bool is_blocked;//need to initialize
-    struct list threads_waited_on;//need to initialize
-    struct list elem waited_elem;//need to initialize
+    struct lock wait_lock;
+    struct condition exited;
+    bool is_blocked;
+    struct list threads_waited_on;
+    struct list_elem waited_elem;
   };
 
   /* Owned by syscall.c. */

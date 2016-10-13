@@ -38,18 +38,18 @@ process_execute (const char *file_name)
   char *token;// used in the separation of filenames and arguments
   char *argvar[40]; // argument array. assumes less than 10 for stack size reasons.
   char *trfn; //TRue FileName, sans arguments 
-  char **saveptr=1;// also used in the separation of filenames and arguments.
+  char *saveptr;// also used in the separation of filenames and arguments.
   
   //Since the filename should be the first token, this should work.
-  trfn=strtok_r(file_name, " ", saveptr);
+  trfn=strtok_r((char *)file_name, " ", &saveptr);
  
   //loop through any number of an unknown number of tokens, and separate variables and place them in argvar.
-  int iter=0;
-  while((token=strtok_r(file_name, " ", saveptr))!=NULL)
+  /*int iter=0;
+  while((token=strtok_r((char *)file_name, " ", &saveptr))!=NULL)
   {
-   argvar[iter]=token;
+   strlcpy(argvar[iter], token, sizeof(token));
    iter++;
-  }
+  }*/
   /* Make a copy of filename.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
@@ -58,7 +58,7 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (trfn, PRI_DEFAULT, start_process, argvar);
+  tid = thread_create (trfn, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -69,9 +69,9 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-  char** saveptr=1;
+  char* saveptr;
   //Since the filename should be the first token, this should work.
-  char *trfn=strtok_r(file_name_, " ", saveptr);
+  char *trfn=strtok_r((char*)file_name_, " ", &saveptr);
   char *file_name = trfn;
   struct intr_frame if_;
   bool success;
@@ -85,7 +85,8 @@ start_process (void *file_name_)
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
+  if (!success)
+    printf("load failed") ;
     thread_exit ();
 
   /* Start the user process by simulating a return from an
@@ -110,7 +111,6 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 { 
-  int status;
   struct thread * cur = thread_current();
   struct list_elem *e;
   struct thread *child_ptr = NULL;
@@ -139,15 +139,17 @@ process_wait (tid_t child_tid UNUSED)
       return -1;
     }
   }
-  lock_acquire(&wait_lock);
-  cur->child->is_waited_on = TRUE;
+  enum thread_status * ret_status = &(cur->child->status);
+  if(!lock_held_by_current_thread(&(cur->wait_lock)))
+  {
+    lock_acquire(&(cur->wait_lock));
+  }
+  cur->child->is_waited_on = true;
   //add thread with child_tid to current thread's threads_waited_on list
   list_push_front(&(cur->threads_waited_on),&(cur->child->waited_elem));
-  cond_wait(&(cur->exited), &(cur->wait_lock));
-  //not done yet
-
-
-
+  //wait for child thread to exit
+  cond_wait(&(cur->child->exited), &(cur->wait_lock));
+  return (int)*ret_status;
 }
 
 /* Free the current process's resources. */
@@ -279,7 +281,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
-
   /* Open executable file. */
   file = filesys_open (file_name);
   if (file == NULL) 
@@ -359,22 +360,21 @@ load (const char *file_name, void (**eip) (void), void **esp)
           break;
         }
     }
-
   /* Set up stack. */
   if (!setup_stack (esp))
     goto done;
 //Break up filename here!!<---!!
   char *token;// used in the separation of filenames and arguments
-  char *argvar[40]; // argument array. assumes less than 10 for stack size reasons.
+  char *argvar[40]; // argument array. assumes less than 40 for stack size reasons.
   char *trfn; //TRue FileName, sans arguments 
-  char **saveptr=1;// also used in the separation of filenames and arguments.
+  char *saveptr;// also used in the separation of filenames and arguments.
   
   //Since the filename should be the first token, this should work.
-  trfn=strtok_r(file_name, " ", saveptr);
+  trfn=strtok_r((char *)file_name, " ", &saveptr);
  
   //loop through any number of an unknown number of tokens, and separate variables and place them in argvar.
   int iter=0;
-  while((token=strtok_r(file_name, " ", saveptr))!=NULL)
+  while((token=strtok_r((char *)file_name, " ", &saveptr))!='\0'&&iter<6)
   {
    *esp=esp-sizeof(*token);
    *(char *)*esp=*token;
